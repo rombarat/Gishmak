@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* Tokens — see DESIGN.md. Colors from the logo (charcoal + gold) and the shop's paper menu. */
+@theme {
+  --color-night: #17130f;
+  --color-night-2: #241e17;
+  --color-night-3: #3a3026;
+  --color-on-night: #f5ead7;
+  --color-on-night-2: #c9b99c;
+  --color-gold: #c8932f;
+  --color-gold-bright: #e8b84f;
+  --color-gold-ink: #855a0c;
+  --color-gold-soft: #f3e3c0;
+  --color-paper: #f6efe3;
+  --color-surface: #fffaf1;
+  --color-surface-2: #efe5d3;
+  --color-ink: #211b13;
+  --color-ink-2: #5e5446;
+  --color-ink-3: #8a7e6c;
+  --color-line: #ddceb6;
+  --color-tomato: #a3311e;
+  --color-tomato-soft: #f6dcd5;
+  --color-leaf: #2f6a3a;
+  --color-leaf-soft: #dfeedd;
+  --color-sky: #2c5986;
+  --color-sky-soft: #dde8f3;
+  --color-amber: #8a5300;
+  --color-amber-soft: #f8e7c6;
+
+  --font-display: var(--font-frank), "David Libre", "Times New Roman", serif;
+  --font-sans: var(--font-assistant), "Arial Hebrew", "Segoe UI", Arial, sans-serif;
+
+  --radius-card: 6px;
+  --shadow-card: 0 1px 2px rgb(40 28 10 / 0.06), 0 6px 20px rgb(40 28 10 / 0.07);
+  --shadow-pop: 0 2px 6px rgb(30 20 8 / 0.12), 0 18px 48px rgb(30 20 8 / 0.18);
+
+  --animate-sheet-up: sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade-in: fade-in 0.18s ease-out;
+  --animate-toast: toast-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 128px;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  button, [role="button"], a, label[for], select, summary { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  :focus-visible {
+    outline: 3px solid var(--color-gold);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  input, select, textarea { font: inherit; color: inherit; }
+  /* Hebrew numerals in prices/times line up */
+  .num { font-variant-numeric: tabular-nums; }
+  /* phone numbers & order numbers stay LTR inside RTL text */
+  .ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Dotted leader between a menu item name and its prices — from the shop's printed menu */
+@utility leader {
+  flex: 1 1 auto;
+  min-width: 1.5rem;
+  height: 0.9em;
+  border-bottom: 2px dotted var(--color-line);
+  transform: translateY(-0.2em);
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

@@ -1,0 +1,189 @@
+// Gishmak shop — relational model.
+// SQLite for local/single-shop deployments; switch `provider` to "postgresql"
+// and DATABASE_URL to move to Postgres (no model changes needed).
+// Status-like fields are strings validated in src/domain (SQLite has no native enums).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  role         String       @default("OWNER") // OWNER | STAFF
+  isActive     Boolean      @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime     @default(now())
+  events       OrderEvent[]
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String    @default("")
+  sortOrder   Int       @default(0)
+  isVisible   Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+model Product {
+  id                  String           @id @default(cuid())
+  slug                String           @unique
+  name                String
+  description         String           @default("")
+  imageUrl            String?
+  imageIsIllustration Boolean          @default(false)
+  imageCredit         String?
+  categoryId          String
+  category            Category         @relation(fields: [categoryId], references: [id])
+  sortOrder           Int              @default(0)
+  isActive            Boolean          @default(true) // shown in store
+  isFeatured          Boolean          @default(false)
+  isArchived          Boolean          @default(false) // soft delete; keeps order history intact
+  soldOutDate         String? // "YYYY-MM-DD" (Israel) — "אזל להיום" applies only on that date
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  variants            ProductVariant[]
+  orderItems          OrderItem[]
+
+  @@index([categoryId, sortOrder])
+}
+
+model ProductVariant {
+  id          String      @id @default(cuid())
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label       String // "קופסה 250 גרם"
+  priceAgorot Int
+  sortOrder   Int         @default(0)
+  isActive    Boolean     @default(true)
+  orderItems  OrderItem[]
+}
+
+// Weekly recurring pickup windows (e.g. Thursday 19:00–21:00).
+model PickupWindow {
+  id        String        @id @default(cuid())
+  weekday   Int // 0 = Sunday … 6 = Saturday
+  startTime String // "HH:mm"
+  endTime   String // "HH:mm"
+  isActive  Boolean       @default(true)
+  capacity  Int? // max orders per window per date; null = unlimited
+  sortOrder Int           @default(0)
+  blocks    PickupBlock[]
+  orders    Order[]
+}
+
+// Block a whole date (windowId = null) or a single window on a date.
+model PickupBlock {
+  id        String        @id @default(cuid())
+  date      String // "YYYY-MM-DD"
+  windowId  String?
+  window    PickupWindow? @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  reason    String        @default("")
+  createdAt DateTime      @default(now())
+
+  @@index([date])
+}
+
+model StoreSettings {
+  id               Int     @id @default(1)
+  isOrderingOpen   Boolean @default(true)
+  closedMessage    String  @default("ההזמנות סגורות כרגע. נשמח לראותכם בחנות.")
+  minLeadHours     Int     @default(12) // earliest pickup = now + lead time
+  maxDaysAhead     Int     @default(10)
+  nextOrderNumber  Int     @default(1001)
+  phone            String  @default("")
+  whatsapp         String  @default("")
+  address          String  @default("")
+  hoursText        String  @default("")
+}
+
+model Order {
+  id             String       @id @default(cuid())
+  orderNumber    Int          @unique
+  publicToken    String       @unique // unguessable id for the customer confirmation URL
+  status         String       @default("NEW") // see src/domain/order-status.ts
+  customerName   String
+  customerPhone  String
+  recipientName  String?
+  notes          String       @default("")
+  pickupDate     String // "YYYY-MM-DD" Israel local date
+  pickupWindowId String?
+  pickupWindow   PickupWindow? @relation(fields: [pickupWindowId], references: [id], onDelete: SetNull)
+  pickupStart    String // snapshot "HH:mm"
+  pickupEnd      String
+  subtotalAgorot Int
+  discountAgorot Int          @default(0)
+  totalAgorot    Int
+  currency       String       @default("ILS")
+  // Payment-ready fields. Today: PAY_AT_PICKUP / UNPAID.
+  paymentMethod  String       @default("PAY_AT_PICKUP") // PAY_AT_PICKUP | ONLINE
+  paymentStatus  String       @default("UNPAID") // UNPAID | PENDING | PAID | PARTIALLY_REFUNDED | REFUNDED | FAILED
+  source         String       @default("ONLINE") // ONLINE | PHONE | WALK_IN
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  items          OrderItem[]
+  events         OrderEvent[]
+  payments       Payment[]
+
+  @@index([pickupDate, status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String?
+  product         Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId       String?
+  variant         ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  // Snapshots so history survives product edits
+  productName     String
+  variantLabel    String
+  unitPriceAgorot Int
+  quantity        Int
+  lineTotalAgorot Int
+}
+
+model OrderEvent {
+  id         String     @id @default(cuid())
+  orderId    String
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type       String // CREATED | STATUS_CHANGED | EDITED | NOTE | PAYMENT
+  fromStatus String?
+  toStatus   String?
+  message    String     @default("")
+  actorId    String?
+  actor      AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime   @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+// Future online payments / refunds. One order can have several attempts.
+model Payment {
+  id                    String   @id @default(cuid())
+  orderId               String
+  order                 Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider              String // e.g. "cardcom", "tranzila", "stripe"
+  providerTransactionId String?
+  amountAgorot          Int
+  refundedAgorot        Int      @default(0)
+  status                String // PENDING | SUCCEEDED | FAILED | REFUNDED
+  rawPayload            String? // JSON from provider
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([orderId])
+}
