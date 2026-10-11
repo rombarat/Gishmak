@@ -1,14 +1,14 @@
 // Gishmak shop — relational model.
-// SQLite for local/single-shop deployments; switch `provider` to "postgresql"
-// and DATABASE_URL to move to Postgres (no model changes needed).
-// Status-like fields are strings validated in src/domain (SQLite has no native enums).
+// PostgreSQL (Neon / Supabase / any Postgres). DATABASE_URL is the runtime connection;
+// migrations run on deploy via scripts/deploy-db.mjs (prefers an unpooled URL).
+// Status-like fields are strings validated in src/domain, so adding a status needs no migration.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

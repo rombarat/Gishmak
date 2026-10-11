@@ -3,23 +3,28 @@
 חנות הזמנה מראש עם איסוף עצמי לגישמאק (אוכל מוכן לשבת, קריית יערים), ומערכת Admin לבעלי העסק.
 Hebrew-first, RTL מלא, mobile-first.
 
-## הפעלה
+## פריסה ל-Vercel
 
-```bash
-cp .env.example .env  # ולעדכן סיסמה ו-SESSION_SECRET
-npm install          # מריץ גם prisma generate
-npm run db:migrate   # יוצר את מסד הנתונים (SQLite, prisma/dev.db) ומריץ seed
-npm run dev          # http://localhost:3000
-```
+1. **Add New → Project** → לייבא את `rombarat/Gishmak` (Framework: Next.js, Root Directory: `./`).
+2. **Environment Variables** — להוסיף לפני הלחיצה על Deploy:
+   - `SESSION_SECRET` — מחרוזת אקראית של 32+ תווים (למשל מ-https://generate-secret.vercel.app/32)
+   - `ADMIN_EMAIL` — האימייל של בעל העסק לכניסה לניהול
+   - `ADMIN_PASSWORD` — סיסמה לכניסה לניהול
+   - `SEED_SAMPLE_ORDERS` = `true` — רק אם רוצים 10 הזמנות לדוגמה בפריסה הראשונה (לא חובה)
+3. **Deploy**. הפריסה הראשונה תיכשל עם הודעה `DATABASE_URL is not set` — זה צפוי.
+4. בפרויקט: **Storage → Create Database → Neon** (Postgres, חינם) → Connect לפרויקט. Vercel מוסיף את `DATABASE_URL` לבד.
+5. (מומלץ) **Storage → Create → Blob** → Connect — מאפשר העלאת תמונות מוצרים מה-Admin.
+6. **Deployments → ⋯ → Redeploy**.
+
+בכל פריסה (`vercel-build`): `prisma generate` → הרצת migrations → seed שלא מוחק ולא משנה נתונים קיימים (יוצר רק מה שחסר: קטגוריות, מוצרים, חלונות איסוף, משתמש הבעלים) → `next build`.
 
 - חנות: `/` · תפריט: `/menu` · השלמת הזמנה: `/checkout` · אישור הזמנה: `/order/<token>`
-- ניהול: `/admin` — פרטי הכניסה הראשוניים מוגדרים ב-`.env` (`ADMIN_EMAIL`, `ADMIN_PASSWORD`). **החליפו אותם ואת `SESSION_SECRET` לפני עלייה לאוויר.**
-- `npm run db:seed` — טוען מחדש הזמנות לדוגמה (הקטלוג לא נדרס).
-- `npm run db:reset` — מוחק הכל ובונה מחדש.
+- ניהול: `/admin` — נכנסים עם `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+- שינוי `ADMIN_PASSWORD` אחרי הפריסה הראשונה לא משנה את הסיסמה הקיימת (המשתמש כבר נוצר).
 
 ## Stack
 
-Next.js 15 (App Router, Server Components, Server Actions) · TypeScript · Tailwind CSS v4 · Prisma 6 · SQLite (מעבר ל-PostgreSQL: לשנות `provider` ב-`schema.prisma` ואת `DATABASE_URL`) · zod · jose (session JWT) · bcryptjs.
+Next.js 15 (App Router, Server Components, Server Actions) · TypeScript · Tailwind CSS v4 · Prisma 6 · PostgreSQL (Neon) · Vercel Blob · zod · jose (session JWT) · bcryptjs.
 
 ## מבנה
 
@@ -63,7 +68,7 @@ UI לא מכיל לוגיקה עסקית: הוא קורא לפונקציות ב-
 ## תמונות
 
 תמונות `real-*` צולמו בחנות (פורסמו ע"י העסק ב-easy.co.il — מומלץ לוודא הרשאת שימוש). תמונות `ill-*` מ-Wikimedia Commons ברישיון CC ומסומנות באתר "להמחשה". מוצר בלי תמונה מוצג כשורה בתפריט ולא עם placeholder. מקור מלא: `SOURCES.md`.
-העלאת תמונות מה-Admin נשמרת ב-`public/uploads` — בפריסה serverless יש להחליף ב-S3/Supabase Storage (`saveUploadedImage` ב-`src/server/admin-catalog.ts`).
+העלאת תמונות מה-Admin נשמרת ב-Vercel Blob (כשמחובר לפרויקט), ראו `saveUploadedImage` ב-`src/server/admin-catalog.ts`.
 
 ## מה לעדכן לפני עלייה לאוויר
 

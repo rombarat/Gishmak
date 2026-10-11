@@ -4,7 +4,10 @@
  * pickup windows based on the published opening hours, an owner account
  * and a handful of sample orders so the admin is not empty on first run.
  *
- * Run: npm run db:seed   (idempotent for catalog; resets orders)
+ * Safe to run on every deploy (Vercel build runs it): it only creates what is
+ * missing and never deletes or changes existing data.
+ * Sample orders are created only when SEED_SAMPLE_ORDERS="true" and the
+ * database has no orders yet.
  */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -195,7 +198,7 @@ async function main() {
   // admin
   const email = (process.env.ADMIN_EMAIL ?? "owner@gishmak.local").toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
-  if (!password) throw new Error("Set ADMIN_PASSWORD in .env before seeding");
+  if (!password) throw new Error("ADMIN_PASSWORD is not set. Add it (and ADMIN_EMAIL, SESSION_SECRET) to the Vercel project environment variables.");
   await db.adminUser.upsert({
     where: { email },
     update: {},
@@ -234,9 +237,12 @@ async function main() {
     for (const [i, w] of WINDOWS.entries()) await db.pickupWindow.create({ data: { ...w, sortOrder: i } });
   }
 
-  // sample orders (reset each seed)
-  await db.order.deleteMany({});
   const windows = await db.pickupWindow.findMany();
+  // sample orders: opt-in, and only into an empty database
+  if (process.env.SEED_SAMPLE_ORDERS !== "true" || (await db.order.count()) > 0) {
+    console.log(`Seed done (catalog, ${windows.length} pickup windows, admin ${email}). Sample orders skipped.`);
+    return;
+  }
   const variants = await db.productVariant.findMany({ include: { product: true } });
   const v = (slug: string, idx = 0) => {
     const list = variants.filter((x) => x.product.slug === slug).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -276,7 +282,7 @@ async function main() {
   ];
 
   const settings = await db.storeSettings.findUnique({ where: { id: 1 } });
-  let no = 1001;
+  let no = settings?.nextOrderNumber ?? 1001;
   for (const s of samples) {
     const w = win(s.date, s.start);
     const lines = s.items.map(([slug, idx, qty]) => {

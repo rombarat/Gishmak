@@ -310,27 +310,66 @@ export async function saveSettings(input: {
 const ALLOWED = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
 const MAX_BYTES = 4 * 1024 * 1024;
 
-/** Stores an uploaded image under /public/uploads. Swap for S3/Supabase Storage in a serverless deploy. */
+/**
+ * Stores an uploaded image. On Vercel (BLOB_READ_WRITE_TOKEN set) it goes to Vercel Blob,
+ * because the server filesystem there is read-only; otherwise to /public/uploads.
+ */
 export async function saveUploadedImage(file: File): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const ext = ALLOWED[file.type as keyof typeof ALLOWED];
   if (!ext) return { ok: false, error: "אפשר להעלות רק JPG, PNG או WEBP" };
   if (file.size > MAX_BYTES) return { ok: false, error: "התמונה גדולה מדי (עד 4MB)" };
+  const name = `${Date.now()}-${randomBytes(4).toString("hex")}.${ext}`;
+
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const { put } = await import("@vercel/blob");
+    const blob = await put(`products/${name}`, file, { access: "public", contentType: file.type });
+    return { ok: true, url: blob.url };
+  }
+  if (process.env.VERCEL) {
+    return { ok: false, error: "העלאת תמונות עוד לא הוגדרה. ב-Vercel: Storage ← Create ← Blob, לחבר לפרויקט ולפרוס מחדש." };
+  }
   const dir = path.join(process.cwd(), "public", "uploads");
   await mkdir(dir, { recursive: true });
-  const name = `${Date.now()}-${randomBytes(4).toString("hex")}.${ext}`;
   await writeFile(path.join(dir, name), Buffer.from(await file.arrayBuffer()));
   return { ok: true, url: `/uploads/${name}` };
 }
 
-/** Images already on disk, offered as a picker in the product form. */
+/** Photos shipped in public/images. Listed statically because /public is not on a Vercel function's disk. */
+const BUNDLED_IMAGES = [
+  "real-challah.jpg",
+  "real-babka.jpg",
+  "real-babka-tray.jpg",
+  "real-hummus.jpg",
+  "real-rugelach.jpg",
+  "real-choc-cake.jpg",
+  "real-croissant.jpg",
+  "real-wine.jpg",
+  "real-salad-fridge.jpg",
+  "real-store.jpg",
+  "real-nuts-shelf.jpg",
+  "ill-cholent.jpg",
+  "ill-jerusalem-kugel.jpg",
+  "ill-potato-kugel.jpg",
+  "ill-sweet-kugel.jpg",
+  "ill-chopped-liver.jpg",
+  "ill-gefilte.jpg",
+  "ill-matbucha.jpg",
+].map((f) => `/images/${f}`);
+
+/** Picker for the product form: earlier uploads first, then the bundled photos. */
 export async function listImageLibrary(): Promise<string[]> {
-  const read = async (sub: string) => {
-    try {
-      const files = await readdir(path.join(process.cwd(), "public", sub));
-      return files.filter((f) => /\.(jpe?g|png|webp)$/i.test(f) && !f.startsWith("logo")).map((f) => `/${sub}/${f}`);
-    } catch {
-      return [];
+  let uploads: string[] = [];
+  try {
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const { list } = await import("@vercel/blob");
+      const res = await list({ prefix: "products/", limit: 200 });
+      uploads = res.blobs.map((b) => b.url);
+    } else {
+      const files = await readdir(path.join(process.cwd(), "public", "uploads"));
+      uploads = files.filter((f) => /\.(jpe?g|png|webp)$/i.test(f)).map((f) => `/uploads/${f}`);
     }
-  };
-  return [...(await read("images")), ...(await read("uploads"))];
+  } catch {
+    uploads = [];
+  }
+  return [...uploads.reverse(), ...BUNDLED_IMAGES];
 }
